@@ -1,0 +1,230 @@
+program:
+  name: "영어 단어 학습 도우미"
+  description: "영어 단어장 생성 프로그램"
+
+model:
+  name: "llama2"
+  context_length: 2048
+  temperature: 0.7
+  top_p: 0.9
+  max_tokens: 500
+
+commands:
+  - name: "generate_vocabulary"
+    description: "영어 단어장 생성"
+    prompt_template: |
+      {school_level} 학생을 위한 영어 단어장을 {count}개 생성해주세요.
+      이떄 의미는 무조권 한국어로 작성해주세요. 
+      # 절대로 의미는 발음 기호 및 한자로 작성 하시면 안됩니다. 
+      # 해변 (beach) 일경우 해변이라는 단어만 의미에 작성을 해 주세요
+      의미는 apple 이 사과 라는 뜻이면 "사과"로 작성해주세요. 
+      각 단어는 다음 형식으로 작성해주세요:
+
+      -단어: [영단어]
+      -의미: [한국어 의미]
+    parameters:
+      - name: "count"
+        description: "생성할 단어 개수"
+        type: "integer"
+        default: 10
+      - name: "school_level"
+        description: "학교 수준"
+        type: "string"
+        choices: ["초등", "중등", "고등"]
+        default: "중등"
+
+  - name: "generate_vocabulary_options"
+    description: "단어와 의미에 맞는 선택지 생성"
+    prompt_template: "당신은 영어 단어장 선택지 생성 AI입니다. 다음 영어 단어의 의미에 맞는 객관식 문제의 선택지를 생성해주세요.
+            
+단어: {word}
+의미: {meaning}
+
+정답은 '{meaning}'입니다. 오답 3개를 추가로 생성해주세요.
+오답은 정답과 같은 카테고리에 속하는 단어여야 하며, 정답과 중복되지 않아야 합니다.
+
+선택지 생성 규칙:
+1. 선택지는 모두 한국어로만 작성하세요. 절대 영어 단어를 사용하지 마세요.
+2. 선택지는 단어로만 작성하세요 (10자 이내).
+3. 선택지에 번호나 기호를 붙이지 마세요 (예: '1.', '*', '-' 등).
+4. 선택지에 영어 단어나 설명을 포함하지 마세요.
+5. 선택지는 쉼표로만 구분하세요.
+6. 모든 선택지는 반드시 한국어로만 작성해야 합니다.
+7. 발음 표기나 괄호 설명을 포함하지 마세요. (예: '사과 (sa-gwa)' → '사과')
+8. 하이픈(-) 뒤에 영어 단어를 포함하지 마세요. (예: '사과 - Apple' → '사과')
+9. 정답을 두 번 포함하지 마세요.
+
+예를 들어, 'apple'의 의미가 '사과'라면 다음과 같이 응답하세요:
+사과, 바나나, 오렌지, 포도
+
+'dog'의 의미가 '개'라면 다음과 같이 응답하세요:
+개, 고양이, 토끼, 말
+
+반드시 다음 형식으로만 응답하세요:
+{meaning}, [한국어 오답1], [한국어 오답2], [한국어 오답3]
+
+다른 설명이나 추가 텍스트 없이 위 형식으로만 정확히 응답하세요. 절대 영어 단어를 포함하지 마세요."
+    parameters:
+      - name: "word"
+        description: "영어 단어"
+        type: "string"
+        required: true
+      - name: "meaning"
+        description: "단어의 한국어 의미"
+        type: "string"
+        required: true
+
+  - name: "translate_to_korean"
+    description: "영어 단어나 문장을 한국어로 번역"
+    prompt_template: "다음 영어 단어나 문장을 한국어로 간결하게 번역해주세요:
+
+{text}
+
+한국어 번역만 작성해주세요. 다른 설명 없이 번역된 텍스트만 작성하세요."
+    parameters:
+      - name: "text"
+        description: "번역할 영어 텍스트"
+        type: "string"
+        required: true
+
+  - name: "generate_example_sentences"
+    description: "영어 단어를 사용한 예문 생성"
+    prompt_template: "{school_level} 학생을 위한 {difficulty} 난이도의 영어 예문을 {count}개 생성해주세요. ({grade_range})
+
+단어: {word}
+의미: {meaning}
+
+각 예문은 다음 형식으로 정확히 작성해주세요:
+영어: [영어 예문]
+한국어: [한국어 번역]
+
+예문은 단어 '{word}'를 반드시 포함해야 합니다.
+예문은 {school_level} 학생이 이해할 수 있는 {difficulty} 난이도로 작성해주세요.
+예문 사이에는 빈 줄을 넣어주세요."
+    parameters:
+      - name: "word"
+        description: "예문에 포함할 영어 단어"
+        type: "string"
+        required: true
+      - name: "meaning"
+        description: "단어의 한국어 의미"
+        type: "string"
+        required: true
+      - name: "count"
+        description: "생성할 예문 개수"
+        type: "integer"
+        default: 3
+        min: 1
+        max: 10
+      - name: "school_level"
+        description: "학교 수준"
+        type: "string"
+        choices: ["초등", "중등", "고등"]
+        default: "중등"
+        required: true
+
+  - name: "generate_word_quiz"
+    description: "영어 단어 퀴즈 생성"
+    prompt_template: "{school_level} 학생을 위한 {difficulty} 난이도의 영어 단어 퀴즈를 {count}개 생성해주세요. ({grade_range})
+
+각 퀴즈는 다음 형식으로 정확히 작성해주세요:
+문제: [퀴즈 문제]
+정답: [정답]
+해설: [간단한 해설]
+
+퀴즈 유형은 다음 중 하나를 랜덤하게 선택하세요:
+1. 빈칸 채우기: '그는 매일 아침 ____(exercise)를 합니다.' → '운동'
+2. 단어 의미 맞추기: 'apple의 의미는 무엇인가요?' → '사과'
+3. 문맥에 맞는 단어 고르기: '나는 학교에 ___. (go/goes/went/gone)' → 'go'
+
+퀴즈 사이에는 빈 줄을 넣어주세요."
+    parameters:
+      - name: "count"
+        description: "생성할 퀴즈 개수"
+        type: "integer"
+        default: 5
+        min: 1
+        max: 20
+      - name: "school_level"
+        description: "학교 수준"
+        type: "string"
+        choices: ["초등", "중등", "고등"]
+        default: "중등"
+        required: true
+
+  - name: "generate_word_categories"
+    description: "영어 단어 카테고리별 분류"
+    prompt_template: |
+      다음 영어 단어들을 의미에 따라 카테고리별로 분류해주세요:
+
+      {words}
+
+      각 카테고리는 다음 형식으로 정확히 작성해주세요:
+      [카테고리명]:
+      - [단어1]: [의미1]
+      - [단어2]: [의미2]
+      ...
+
+      가능한 카테고리의 예시: 과일, 채소, 동물, 가구, 음식, 색상, 직업, 도구, 학용품, 신체, 장소, 교통수단 등
+      단어의 의미와 특성에 맞게 적절한 카테고리를 생성해주세요.
+    parameters:
+      - name: "words"
+        description: "분류할 영어 단어 목록 (쉼표로 구분)"
+        type: "string"
+        required: true
+
+  - name: "generate_word_association"
+    description: "영어 단어 연상 학습"
+    prompt_template: "다음 영어 단어에 대한 연상 학습 자료를 생성해주세요:
+
+단어: {word}
+의미: {meaning}
+
+다음 형식으로 작성해주세요:
+1. 유의어: [유의어 3-5개와 각각의 한국어 의미]
+2. 반의어: [반의어 2-3개와 각각의 한국어 의미]
+3. 관련 단어: [관련 단어 5-7개와 각각의 한국어 의미]
+4. 연상 이미지: [단어를 기억하는 데 도움이 되는 이미지나 상황 설명]
+5. 어원 설명: [단어의 어원이나 유래에 대한 간단한 설명]
+6. 기억법: [단어를 쉽게 기억할 수 있는 방법이나 팁]"
+    parameters:
+      - name: "word"
+        description: "연상 학습할 영어 단어"
+        type: "string"
+        required: true
+      - name: "meaning"
+        description: "단어의 한국어 의미"
+        type: "string"
+        required: true
+
+  - name: "generate_vocabulary_test"
+    description: "영어 단어 시험지 생성"
+    prompt_template: "{school_level} 학생을 위한 {difficulty} 난이도의 영어 단어 시험지를 생성해주세요. ({grade_range})
+
+시험 제목: {title}
+문제 수: {count}개
+
+각 문제는 다음 형식 중 하나로 작성해주세요:
+1. 영어 단어의 의미 고르기: [영어 단어] - a) [선택지1] b) [선택지2] c) [선택지3] d) [선택지4]
+2. 한국어 의미에 맞는 영어 단어 고르기: [한국어 의미] - a) [선택지1] b) [선택지2] c) [선택지3] d) [선택지4]
+3. 문장 빈칸에 들어갈 단어 고르기: [문장] - a) [선택지1] b) [선택지2] c) [선택지3] d) [선택지4]
+
+시험지 마지막에는 정답 및 간단한 해설을 포함해주세요."
+    parameters:
+      - name: "title"
+        description: "시험지 제목"
+        type: "string"
+        default: "영어 단어 시험"
+        required: false
+      - name: "count"
+        description: "문제 개수"
+        type: "integer"
+        default: 10
+        min: 5
+        max: 30
+      - name: "school_level"
+        description: "학교 수준"
+        type: "string"
+        choices: ["초등", "중등", "고등"]
+        default: "중등"
+        required: true
