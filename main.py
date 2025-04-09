@@ -27,10 +27,44 @@ class WordRequest(BaseModel):
     vocaId: int
     schoolLevel: Optional[str] = "중등"
 
+class RouletteRequest(BaseModel):
+    word: str
+    count: Optional[int] = 8
+
+class VocabularyRequest(BaseModel):
+    count: Optional[int] = 10
+    school_level: Optional[str] = "중등"
+
+class VocabularyItemRequest(BaseModel):
+    word: str
+    meaning: str
+
+class VocabularyGenerateRequest(BaseModel):
+    items: List[VocabularyItemRequest]
+
 # 응답 모델 정의
 class WordResponse(BaseModel):
     status: str
     data: Dict[str, Any]
+
+class RouletteItem(BaseModel):
+    id: int
+    name: str
+    color: str
+    percentage: int
+
+class RouletteResponse(BaseModel):
+    status: str
+    data: List[RouletteItem]
+
+class VocabularyItem(BaseModel):
+    word: str
+    meaning: str
+    options: List[str]
+
+class VocabularyResponse(BaseModel):
+    status: str
+    data: List[VocabularyItem]
 
 # 오류 응답 모델
 class ErrorResponse(BaseModel):
@@ -119,6 +153,107 @@ async def api_docs():
                             "vocaId": 1,
                             "schoolLevel": "초등",
                             "id": 1235
+                        }
+                    ]
+                }
+            },
+            {
+                "path": "/generate-roulette",
+                "method": "POST",
+                "description": "단어를 기반으로 룰렛 아이템 생성",
+                "parameters": [
+                    {
+                        "name": "word",
+                        "type": "string",
+                        "description": "기준 단어",
+                        "required": True
+                    },
+                    {
+                        "name": "count",
+                        "type": "integer",
+                        "description": "생성할 단어 개수",
+                        "default": 8,
+                        "required": False
+                    }
+                ],
+                "response_example": {
+                    "status": "success",
+                    "data": [
+                        {"id": 1, "name": "사과", "color": "#E7EFF3", "percentage": 3},
+                        {"id": 2, "name": "바나나", "color": "#ffffff", "percentage": 7},
+                        {"id": 3, "name": "오렌지", "color": "#E7EFF3", "percentage": 10},
+                        {"id": 4, "name": "꽝4", "color": "#ffffff", "percentage": 20},
+                        {"id": 5, "name": "꽝5", "color": "#E7EFF3", "percentage": 20},
+                        {"id": 6, "name": "꽝6", "color": "#ffffff", "percentage": 20},
+                        {"id": 7, "name": "꽝7", "color": "#E7EFF3", "percentage": 10},
+                        {"id": 8, "name": "꽝8", "color": "#ffffff", "percentage": 10}
+                    ]
+                }
+            },
+            {
+                "path": "/generate-vocabulary",
+                "method": "POST",
+                "description": "단어장 데이터 생성",
+                "parameters": [
+                    {
+                        "name": "count",
+                        "type": "integer",
+                        "description": "생성할 단어 개수",
+                        "default": 10,
+                        "required": False
+                    },
+                    {
+                        "name": "school_level",
+                        "type": "string",
+                        "description": "학교 수준 (초등, 중등, 고등)",
+                        "default": "중등",
+                        "required": False
+                    }
+                ],
+                "response_example": {
+                    "status": "success",
+                    "data": [
+                        {
+                            "word": "apple",
+                            "meaning": "사과",
+                            "options": ["사과", "바나나", "오렌지", "포도"]
+                        },
+                        {
+                            "word": "book",
+                            "meaning": "책",
+                            "options": ["책", "연필", "가방", "의자"]
+                        }
+                    ]
+                }
+            },
+            {
+                "path": "/generate-vocabulary-options",
+                "method": "POST",
+                "description": "단어와 의미를 받아 선택지를 포함한 단어장 항목 생성",
+                "parameters": [
+                    {
+                        "name": "items",
+                        "type": "array",
+                        "description": "단어와 의미 목록",
+                        "required": True,
+                        "items": {
+                            "word": "string",
+                            "meaning": "string"
+                        }
+                    }
+                ],
+                "response_example": {
+                    "status": "success",
+                    "data": [
+                        {
+                            "word": "apple",
+                            "meaning": "사과",
+                            "options": ["사과", "바나나", "오렌지", "포도"]
+                        },
+                        {
+                            "word": "book",
+                            "meaning": "책",
+                            "options": ["책", "연필", "가방", "의자"]
                         }
                     ]
                 }
@@ -370,6 +505,214 @@ async def generate_multiple_words(voca_id: int, count: int = 10, school_level: s
         raise HTTPException(
             status_code=500,
             detail=f"여러 단어 생성 중 오류 발생: {str(e)}"
+        )
+
+@app.post("/generate-vocabulary", response_model=VocabularyResponse)
+async def generate_vocabulary(request: VocabularyRequest):
+    """단어장 데이터를 생성합니다."""
+    if config is None:
+        raise HTTPException(
+            status_code=500,
+            detail="설정이 초기화되지 않았습니다."
+        )
+    
+    try:
+        # 학교 수준에 따른 난이도 조정
+        school_level = request.school_level
+        if school_level == "초등":
+            difficulty = "쉬운"
+            grade_range = "1-6학년"
+        elif school_level == "중등":
+            difficulty = "중간"
+            grade_range = "7-9학년"
+        elif school_level == "고등":
+            difficulty = "어려운"
+            grade_range = "10-12학년"
+        else:
+            difficulty = "중간"
+            grade_range = "전체"
+        
+        # 단어장 생성을 위한 프롬프트
+        prompt = f"""{school_level} 학생을 위한 {difficulty} 난이도의 영어 단어장을 {request.count}개 생성해주세요. ({grade_range})
+
+각 단어는 다음 형식으로 정확히 작성해주세요:
+단어: [영단어]
+의미: [한국어 의미]
+선택지: [한국어 의미], [오답1], [오답2], [오답3]
+
+단어 사이에는 빈 줄을 넣어주세요. 다른 설명이나 추가 텍스트 없이 위 형식만 사용해주세요.
+
+예시:
+단어: apple
+의미: 사과
+선택지: 사과, 바나나, 오렌지, 포도
+
+단어: book
+의미: 책
+선택지: 책, 연필, 가방, 의자"""
+        
+        # Ollama로 단어장 생성
+        generated_text = generate_with_ollama(prompt, config)
+        print(f"생성된 텍스트: {generated_text}")  # 디버깅용 로그
+        
+        # 생성된 텍스트 파싱
+        vocabulary_items = []
+        current_item = {}
+        
+        lines = generated_text.split('\n')
+        for line in lines:
+            line = line.strip()
+            if not line:
+                if current_item and "word" in current_item and "meaning" in current_item and "options" in current_item:
+                    vocabulary_items.append(current_item)
+                    current_item = {}
+                continue
+                
+            if ":" in line:
+                parts = line.split(":", 1)
+                if len(parts) == 2:
+                    key, value = parts
+                    key = key.strip().lower()
+                    value = value.strip()
+                    
+                    if key == "단어" or key == "word":
+                        if current_item and "word" in current_item and "meaning" in current_item and "options" in current_item:
+                            vocabulary_items.append(current_item)
+                            current_item = {}
+                        current_item["word"] = value
+                    elif key == "의미" or key == "meaning":
+                        current_item["meaning"] = value
+                    elif key == "선택지" or key == "options":
+                        options = [opt.strip() for opt in value.split(',')]
+                        current_item["options"] = options
+        
+        # 마지막 단어 추가
+        if current_item and "word" in current_item and "meaning" in current_item and "options" in current_item:
+            vocabulary_items.append(current_item)
+        
+        # 필요한 수만큼 단어가 생성되었는지 확인
+        if len(vocabulary_items) < request.count:
+            # 부족한 경우 추가 생성 시도
+            additional_prompt = f"""추가로 {request.count - len(vocabulary_items)}개의 {school_level} 학생을 위한 {difficulty} 난이도의 영어 단어장을 생성해주세요. ({grade_range})
+            
+각 단어는 다음 형식으로 정확히 작성해주세요:
+단어: [영단어]
+의미: [한국어 의미]
+선택지: [한국어 의미], [오답1], [오답2], [오답3]
+
+단어 사이에는 빈 줄을 넣어주세요. 다른 설명이나 추가 텍스트 없이 위 형식만 사용해주세요."""
+            
+            additional_text = generate_with_ollama(additional_prompt, config)
+            print(f"추가 생성된 텍스트: {additional_text}")  # 디버깅용 로그
+            
+            # 추가 파싱 로직 (위와 동일)
+            additional_items = []
+            current_item = {}
+            
+            lines = additional_text.split('\n')
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    if current_item and "word" in current_item and "meaning" in current_item and "options" in current_item:
+                        additional_items.append(current_item)
+                        current_item = {}
+                    continue
+                    
+                if ":" in line:
+                    parts = line.split(":", 1)
+                    if len(parts) == 2:
+                        key, value = parts
+                        key = key.strip().lower()
+                        value = value.strip()
+                        
+                        if key == "단어" or key == "word":
+                            if current_item and "word" in current_item and "meaning" in current_item and "options" in current_item:
+                                additional_items.append(current_item)
+                                current_item = {}
+                            current_item["word"] = value
+                        elif key == "의미" or key == "meaning":
+                            current_item["meaning"] = value
+                        elif key == "선택지" or key == "options":
+                            options = [opt.strip() for opt in value.split(',')]
+                            current_item["options"] = options
+            
+            # 마지막 단어 추가
+            if current_item and "word" in current_item and "meaning" in current_item and "options" in current_item:
+                additional_items.append(current_item)
+                
+            vocabulary_items.extend(additional_items)
+        
+        return {
+            "status": "success",
+            "data": vocabulary_items[:request.count]  # 요청한 개수만큼만 반환
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"단어장 생성 중 오류 발생: {str(e)}"
+        )
+
+@app.post("/generate-vocabulary-options", response_model=VocabularyResponse)
+async def generate_vocabulary_options(request: VocabularyGenerateRequest):
+    """단어와 의미를 받아 선택지를 포함한 단어장 항목을 생성합니다."""
+    if config is None:
+        raise HTTPException(
+            status_code=500,
+            detail="설정이 초기화되지 않았습니다."
+        )
+    
+    try:
+        result_items = []
+        
+        # 각 단어에 대해 선택지 생성
+        for item in request.items:
+            # 선택지 생성을 위한 프롬프트
+            prompt = f"""다음 영어 단어의 의미와 함께 객관식 문제의 선택지를 생성해주세요:
+            
+단어: {item.word}
+의미: {item.meaning}
+
+정답은 "{item.meaning}"이고, 오답 3개를 추가로 생성해주세요.
+선택지는 모두 한국어로 작성하고, 쉼표로 구분해주세요.
+다른 설명 없이 선택지만 작성해주세요.
+
+예시 출력 형식:
+사과, 바나나, 오렌지, 포도"""
+            
+            # Ollama로 선택지 생성
+            generated_text = generate_with_ollama(prompt, config)
+            print(f"생성된 텍스트: {generated_text}")  # 디버깅용 로그
+            
+            # 생성된 텍스트 파싱
+            options_text = generated_text.strip()
+            options = [opt.strip() for opt in options_text.split(',')]
+            
+            # 선택지가 4개 미만이면 기본값 추가
+            while len(options) < 4:
+                options.append(f"선택지{len(options)+1}")
+            
+            # 선택지가 4개 초과면 잘라내기
+            options = options[:4]
+            
+            # 정답이 선택지에 없으면 추가
+            if item.meaning not in options:
+                options[0] = item.meaning
+            
+            # 결과 항목 추가
+            result_items.append({
+                "word": item.word,
+                "meaning": item.meaning,
+                "options": options
+            })
+        
+        return {
+            "status": "success",
+            "data": result_items
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"단어장 선택지 생성 중 오류 발생: {str(e)}"
         )
 
 # 서버 실행
