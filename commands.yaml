@@ -1,0 +1,56 @@
+program:
+  name: "단어 생성기"
+  description: "Ollama를 사용하여 다양한 단어를 생성하는 프로그램"
+
+model:
+  name: "llama2"  # Ollama에서 사용할 모델 이름 (llama2, mistral, gemma 등)
+  context_length: 2048
+  temperature: 0.7
+  top_p: 0.9
+  max_tokens: 500
+
+commands:
+  - name: "random_words"
+    description: "무작위 단어 생성"
+    prompt_template: "다음 주제에 관련된 단어를 {count}개 생성해주세요: {topic}"
+    parameters:
+      - name: "topic"
+        description: "단어 생성 주제"
+        type: "string"
+        required: true
+      - name: "count"
+        description: "생성할 단어 개수"
+        type: "integer"
+        default: 5
+        min: 1
+        max: 20
+
+  - name: "related_words"
+    description: "연관 단어 생성"
+    prompt_template: "다음 단어와 연관된 단어를 {count}개 생성해주세요: {word}"
+    parameters:
+      - name: "word"
+        description: "기준 단어"
+        type: "string"
+        required: true
+      - name: "count"
+        description: "생성할 단어 개수"
+        type: "integer"
+        default: 5
+        min: 1
+        max: 20
+        
+  - name: "word_category"
+    description: "특정 카테고리의 단어 생성"
+    prompt_template: "다음 카테고리에 속하는 단어를 {count}개 생성해주세요: {category}"
+    parameters:
+      - name: "category"
+        description: "단어 카테고리 (예: 동물, 음식, 직업 등)"
+        type: "string"
+        required: true
+      - name: "count"
+        description: "생성할 단어 개수"
+        type: "integer"
+        default: 5
+        min: 1
+        max: 20 
