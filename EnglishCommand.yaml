@@ -13,11 +13,22 @@ commands:
   - name: "generate_vocabulary"
     description: "영어 단어장 생성"
     prompt_template: |
-      {school_level} 학생을 위한 영어 단어장을 {count}개 생성해주세요.
+      {school_level} 학생을 위한 {topic} 주제의 영어 단어장을 {count}개 생성해주세요.
       이떄 의미는 무조권 한국어로 작성해주세요. 
       # 절대로 의미는 발음 기호 및 한자로 작성 하시면 안됩니다. 
       # 해변 (beach) 일경우 해변이라는 단어만 의미에 작성을 해 주세요
       의미는 apple 이 사과 라는 뜻이면 "사과"로 작성해주세요. 
+      
+      주제: {topic}
+      난이도: {school_level}
+      언어: {language}
+      
+      주제에 맞는 관련성 높은 단어들을 생성해주세요. 예를 들어:
+      - 음식 주제: 음식, 요리, 식재료 관련 단어
+      - 동물 주제: 동물, 생태, 특징 관련 단어
+      - 여행 주제: 여행, 교통, 관광 관련 단어
+      - 학교 주제: 학업, 교실, 활동 관련 단어
+      
       각 단어는 다음 형식으로 작성해주세요:
 
       -단어: [영단어]
@@ -32,6 +43,16 @@ commands:
         type: "string"
         choices: ["초등", "중등", "고등"]
         default: "중등"
+      - name: "topic"
+        description: "단어장 주제"
+        type: "string"
+        choices: ["음식", "동물", "여행", "학교", "가족", "취미", "직업", "색상", "숫자", "날씨", "운동", "음악", "영화", "책", "기술", "자연", "도시", "집", "옷", "교통"]
+        default: "일반"
+      - name: "language"
+        description: "언어"
+        type: "string"
+        choices: ["영어", "한국어", "일본어", "중국어"]
+        default: "영어"
 
   - name: "generate_vocabulary_options"
     description: "단어와 의미에 맞는 선택지 생성"
