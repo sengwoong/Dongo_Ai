@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # 상대 경로로 임포트
 from routes.vocabulary_routes import vocabulary_router
-from model.database import create_tables
+from models.database import create_tables
 
 # 디렉토리 생성
 os.makedirs("static", exist_ok=True)
@@ -99,4 +99,19 @@ app.openapi = custom_openapi
 
 # 서버 실행
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True) 
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        reload_dirs=["routes", "services", "models", "utils"],
+        reload_excludes=[
+            "logs/*",
+            "*.log",
+            "static/*",
+            "**/__pycache__/**",
+            "**/*.pyc",
+            "**/*.pyo",
+            "**/*.tmp",
+        ],
+    )

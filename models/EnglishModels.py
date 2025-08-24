@@ -1,5 +1,8 @@
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any, List
+
+
+# ===== Request Models =====
 
 class WordRequest(BaseModel):
     word: str = Field(..., description="영어 단어", example="apple")
@@ -7,9 +10,11 @@ class WordRequest(BaseModel):
     vocaId: int = Field(..., description="단어장 ID", example=1)
     schoolLevel: Optional[str] = Field("중등", description="학교 수준", example="중등")
 
+
 class RouletteRequest(BaseModel):
     word: str = Field(..., description="영어 단어", example="apple")
     count: Optional[int] = Field(8, description="생성할 선택지 개수", example=8)
+
 
 class VocabularyRequest(BaseModel):
     count: Optional[int] = Field(10, description="생성할 단어 개수 (1-50)", example=10, ge=1, le=50)
@@ -27,9 +32,10 @@ class VocabularyRequest(BaseModel):
                 "topic": "음식",
                 "language": "영어",
                 "userId": "user123",
-                "vocaId": "voca456"
+                "vocaId": "voca456",
             }
         }
+
 
 class VocabularyItemRequest(BaseModel):
     word: str = Field(..., description="영어 단어", example="apple")
@@ -39,12 +45,13 @@ class VocabularyItemRequest(BaseModel):
         json_schema_extra = {
             "example": {
                 "word": "apple",
-                "meaning": "사과"
+                "meaning": "사과",
             }
         }
 
+
 class VocabularyGenerateRequest(BaseModel):
-    items: List[VocabularyItemRequest] = Field(..., description="단어 목록", min_items=1)
+    items: List['VocabularyItemRequest'] = Field(..., description="단어 목록", min_items=1)
     userId: Optional[str] = Field(None, description="사용자 ID", example="user123")
     vocaId: Optional[str] = Field(None, description="단어장 ID", example="voca456")
 
@@ -53,16 +60,20 @@ class VocabularyGenerateRequest(BaseModel):
             "example": {
                 "items": [
                     {"word": "apple", "meaning": "사과"},
-                    {"word": "book", "meaning": "책"}
+                    {"word": "book", "meaning": "책"},
                 ],
                 "userId": "user123",
-                "vocaId": "voca456"
+                "vocaId": "voca456",
             }
         }
+
+
+# ===== Response/Item Models =====
 
 class WordResponse(BaseModel):
     status: str = Field(..., description="응답 상태", example="success")
     data: Dict[str, Any] = Field(..., description="응답 데이터")
+
 
 class RouletteItem(BaseModel):
     id: int = Field(..., description="선택지 ID", example=1)
@@ -70,9 +81,11 @@ class RouletteItem(BaseModel):
     color: str = Field(..., description="선택지 색상", example="#FF0000")
     percentage: int = Field(..., description="선택지 확률 (%)", example=25)
 
+
 class RouletteResponse(BaseModel):
     status: str = Field(..., description="응답 상태", example="success")
     data: List[RouletteItem] = Field(..., description="선택지 목록")
+
 
 class VocabularyItem(BaseModel):
     word: str = Field(..., description="영어 단어", example="apple")
@@ -84,9 +97,10 @@ class VocabularyItem(BaseModel):
             "example": {
                 "word": "apple",
                 "meaning": "사과",
-                "options": ["사과", "바나나", "오렌지", "포도"]
+                "options": ["사과", "바나나", "오렌지", "포도"],
             }
         }
+
 
 class VocabularyResponse(BaseModel):
     status: str = Field(..., description="응답 상태", example="success")
@@ -100,16 +114,17 @@ class VocabularyResponse(BaseModel):
                     {
                         "word": "apple",
                         "meaning": "사과",
-                        "options": ["사과", "바나나", "오렌지", "포도"]
+                        "options": ["사과", "바나나", "오렌지", "포도"],
                     },
                     {
                         "word": "book",
                         "meaning": "책",
-                        "options": ["책", "펜", "지우개", "가방"]
-                    }
-                ]
+                        "options": ["책", "펜", "지우개", "가방"],
+                    },
+                ],
             }
         }
+
 
 class ErrorResponse(BaseModel):
     status: str = Field(..., description="에러 상태", example="error")
@@ -119,6 +134,6 @@ class ErrorResponse(BaseModel):
         json_schema_extra = {
             "example": {
                 "status": "error",
-                "message": "단어장 생성 중 오류가 발생했습니다."
+                "message": "단어장 생성 중 오류가 발생했습니다.",
             }
-        } 
+        }

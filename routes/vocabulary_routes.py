@@ -6,17 +6,26 @@ from typing import Dict, Any, List, Optional
 import datetime
 from sqlalchemy.orm import Session
 
-# 현재 디렉토리의 상위 디렉토리를 경로에 추가
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# 상대 경로로 임포트
-from model.EnglishModels import (
+from models.EnglishModels import (
     VocabularyRequest, VocabularyGenerateRequest, VocabularyResponse
 )
-from model.database import get_db, VocabularyItem, Vocabulary
+from models.database import get_db, VocabularyItem, Vocabulary
 
-# utils.py 파일을 직접 import
-import vocab_utils
+from services.problemgeneration import (
+    generate_vocabulary as ai_generate_vocabulary,
+    generate_options as ai_generate_options,
+)
+from services.vocabulary import (
+    create_vocabulary_item,
+    list_vocabulary_items,
+    get_vocabulary_item_by_word,
+    create_vocabulary_items,
+    create_vocabulary_item_single,
+    update_vocabulary_item,
+    delete_vocabulary_item,
+)
 
 vocabulary_router = APIRouter(
     prefix="/vocabulary", 
@@ -27,108 +36,10 @@ vocabulary_router = APIRouter(
     }
 )
 
-# config 로딩을 함수 내부로 이동
-def get_config():
-    return vocab_utils.load_config()
 
-def create_vocabulary_item(item, options, userId, vocaId, db: Session):
-    """단어장 항목을 생성합니다."""
-    options_json = json.dumps(options, ensure_ascii=False)
-    db_item = VocabularyItem(
-        word=item.word,
-        meaning=item.meaning,
-        options=options_json,
-        userId=userId,
-        vocaId=vocaId
-    )
-    db.add(db_item)
-    db.commit()
-    db.refresh(db_item)
-    return db_item
 
-def prepare_response_items(items):
-    """응답용 항목을 준비합니다."""
-    result = []
-    for item in items:
-        options = json.loads(item.options) if item.options else []
-        result.append({
-            "word": item.word,
-            "meaning": item.meaning,
-            "options": options
-        })
-    return result
-
-@vocabulary_router.post(
-    "/generate", 
-    response_model=VocabularyResponse,
-    summary="단어장 생성",
-    description="""
-    ## 단어장 생성 API
-    
-    Ollama를 사용하여 학교 수준에 맞는 영어 단어장을 동적으로 생성합니다.
-    
-    ### 기능:
-    - AI가 학교 수준에 맞는 영어 단어를 자동 생성
-    - 단어와 한국어 의미 제공
-    - 요청한 개수만큼 단어 생성
-    - 실패 시 최대 3회 재시도
-    
-    ### 학교 수준별 난이도:
-    - **초등학교**: 3-6학년 수준의 쉬운 단어
-    - **중학교**: 1-3학년 수준의 중간 난이도 단어  
-    - **고등학교**: 1-3학년 수준의 어려운 단어
-    
-    ### 응답 예시:
-    ```json
-    {
-      "status": "success",
-      "data": [
-        {
-          "word": "apple",
-          "meaning": "사과",
-          "options": []
-        }
-      ]
-    }
-    ```
-    """,
-    responses={
-        200: {
-            "description": "단어장 생성 성공",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "status": "success",
-                        "data": [
-                            {
-                                "word": "apple",
-                                "meaning": "사과",
-                                "options": []
-                            },
-                            {
-                                "word": "book",
-                                "meaning": "책",
-                                "options": []
-                            }
-                        ]
-                    }
-                }
-            }
-        },
-        500: {
-            "description": "단어장 생성 실패",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "단어장 생성 중 오류 발생: AI 모델 연결 실패"
-                    }
-                }
-            }
-        }
-    }
-)
-async def generate_vocabulary(request: VocabularyRequest):
-    """단어장 데이터를 동적으로 생성합니다."""
+@vocabulary_router.post("/generate")
+async def generate_vocabulary(request: VocabularyRequest, db: Session = Depends(get_db)):
     try:
         # 요청 파라미터 추출
         count = request.count if request.count else 10
@@ -139,7 +50,20 @@ async def generate_vocabulary(request: VocabularyRequest):
         print(f"단어장 생성 요청: count={count}, school_level={school_level}, topic={topic}, language={language}")
         
         # 동적 단어장 생성 (주제와 언어 정보 포함)
-        vocabulary_items = vocab_utils.generate_vocabulary(count, school_level, topic, language)
+        vocabulary_items = ai_generate_vocabulary(count, school_level, topic, language)
+
+        # 저장: userId가 있으면 vocaId 자동 생성/보장, 없으면 저장 생략
+        used_voca_id = None
+        if request.userId:
+            used_voca_id, created = create_vocabulary_items(
+                vocabulary_items,
+                request.userId,
+                getattr(request, 'vocaId', None),
+                db,
+                title=f"{topic} 단어장",
+                description=f"{school_level}용 {topic} 단어장",
+                schoolLevel=school_level,
+            )
         
         # 응답 데이터 형식으로 변환
         formatted_items = []
@@ -151,10 +75,10 @@ async def generate_vocabulary(request: VocabularyRequest):
             }
             formatted_items.append(formatted_item)
         
-        return {
-            "status": "success",
-            "data": formatted_items
-        }
+        payload = {"status": "success", "data": formatted_items}
+        if used_voca_id:
+            payload["vocaId"] = used_voca_id
+        return payload
     except Exception as e:
         error_msg = f"단어장 생성 중 오류 발생: {str(e)}"
         print(error_msg)
@@ -162,85 +86,11 @@ async def generate_vocabulary(request: VocabularyRequest):
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=error_msg)
 
-@vocabulary_router.post(
-    "/generate-options", 
-    response_model=VocabularyResponse,
-    summary="선택지 포함 단어장 생성",
-    description="""
-    ## 선택지 포함 단어장 생성 API
-    
-    단어와 의미를 받아서 객관식 선택지를 포함한 단어장 항목을 동적으로 생성하고 저장합니다.
-    
-    ### 기능:
-    - 기존 단어에 대한 객관식 선택지 동적 생성
-    - 생성된 항목을 MySQL에 저장
-    - userId와 vocaId로 단어장 구분
-    - 실패 시 최대 3회 재시도
-    
-    ### 필수 파라미터:
-    - **userId**: 사용자 ID (필수)
-    - **vocaId**: 단어장 ID (필수)
-    - **items**: 단어 목록 (필수)
-    
-    ### 응답 예시:
-    ```json
-    {
-      "status": "success",
-      "data": [
-        {
-          "word": "apple",
-          "meaning": "사과",
-          "options": ["사과", "바나나", "오렌지", "포도"]
-        }
-      ]
-    }
-    ```
-    """,
-    responses={
-        200: {
-            "description": "선택지 생성 및 저장 성공",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "status": "success",
-                        "data": [
-                            {
-                                "word": "apple",
-                                "meaning": "사과",
-                                "options": ["사과", "바나나", "오렌지", "포도"]
-                            }
-                        ]
-                    }
-                }
-            }
-        },
-        400: {
-            "description": "필수 파라미터 누락",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "userId와 vocaId는 필수 항목입니다."
-                    }
-                }
-            }
-        },
-        500: {
-            "description": "선택지 생성 실패",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "선택지 생성 중 오류 발생: AI 모델 연결 실패"
-                    }
-                }
-            }
-        }
-    }
-)
+@vocabulary_router.post("/generate-options")
 async def generate_vocabulary_options(
     request: VocabularyGenerateRequest,
     db: Session = Depends(get_db)
 ):
-    """단어와 의미를 받아서 선택지를 포함한 단어장 항목을 동적으로 생성합니다."""
     try:
         # 필수 파라미터 검증
         if not request.userId or not request.vocaId:
@@ -261,7 +111,7 @@ async def generate_vocabulary_options(
         for item in request.items:
             try:
                 # 동적 선택지 생성
-                options = vocab_utils.generate_options(item.word, item.meaning)
+                options = ai_generate_options(item.word, item.meaning)
                 
                 # 데이터베이스에 저장
                 db_item = create_vocabulary_item(
@@ -297,78 +147,7 @@ async def generate_vocabulary_options(
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=error_msg)
 
-@vocabulary_router.get(
-    "", 
-    response_model=Dict[str, Any],
-    summary="단어장 조회",
-    description="""
-    ## 단어장 조회 API
-    
-    저장된 단어장 항목을 조회합니다.
-    
-    ### 기능:
-    - userId와 vocaId로 필터링 가능
-    - 페이지네이션 지원 (limit, skip)
-    - 저장된 모든 단어장 항목 조회
-    
-    ### 쿼리 파라미터:
-    - **userId** (선택): 사용자 ID로 필터링
-    - **vocaId** (선택): 단어장 ID로 필터링
-    - **limit** (선택): 조회할 항목 수 (기본값: 100)
-    - **skip** (선택): 건너뛸 항목 수 (기본값: 0)
-    
-    ### 응답 예시:
-    ```json
-    {
-      "status": "success",
-      "count": 2,
-      "data": [
-        {
-          "word": "apple",
-          "meaning": "사과",
-          "options": ["사과", "바나나", "오렌지", "포도"],
-          "userId": "user123",
-          "vocaId": "voca456",
-          "createdAt": "2024-01-01T00:00:00"
-        }
-      ]
-    }
-    ```
-    """,
-    responses={
-        200: {
-            "description": "단어장 조회 성공",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "status": "success",
-                        "count": 2,
-                        "data": [
-                            {
-                                "word": "apple",
-                                "meaning": "사과",
-                                "options": ["사과", "바나나", "오렌지", "포도"],
-                                "userId": "user123",
-                                "vocaId": "voca456",
-                                "createdAt": "2024-01-01T00:00:00"
-                            }
-                        ]
-                    }
-                }
-            }
-        },
-        500: {
-            "description": "단어장 조회 실패",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "단어장 조회 중 오류 발생: 데이터베이스 연결 실패"
-                    }
-                }
-            }
-        }
-    }
-)
+@vocabulary_router.get("")
 async def get_vocabulary_items(
     userId: Optional[str] = Query(None, description="사용자 ID로 필터링"),
     vocaId: Optional[str] = Query(None, description="단어장 ID로 필터링"),
@@ -376,36 +155,10 @@ async def get_vocabulary_items(
     skip: int = Query(0, description="건너뛸 항목 수", ge=0),
     db: Session = Depends(get_db)
 ):
-    """저장된 단어장 항목을 조회합니다."""
     try:
-        # 쿼리 조건 구성
-        query = db.query(VocabularyItem)
-        
-        if userId:
-            query = query.filter(VocabularyItem.userId == userId)
-        
-        if vocaId:
-            query = query.filter(VocabularyItem.vocaId == vocaId)
-        
-        # 전체 개수 조회
-        total_count = query.count()
-        
-        # 페이지네이션 적용
-        items = query.offset(skip).limit(limit).all()
-        
-        # 응답 데이터 준비
-        result_items = []
-        for item in items:
-            options = json.loads(item.options) if item.options else []
-            result_items.append({
-                "word": item.word,
-                "meaning": item.meaning,
-                "options": options,
-                "userId": item.userId,
-                "vocaId": item.vocaId,
-                "createdAt": item.createdAt.isoformat() if item.createdAt else None
-            })
-        
+        total_count, result_items = list_vocabulary_items(
+            db=db, userId=userId, vocaId=vocaId, limit=limit, skip=skip
+        )
         return {
             "status": "success",
             "count": total_count,
@@ -418,4 +171,138 @@ async def get_vocabulary_items(
         import traceback
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=error_msg)
+
+
+@vocabulary_router.post("")
+async def create_item(
+    userId: str = Query(...),
+    word: str = Query(...),
+    meaning: str = Query(...),
+    vocaId: Optional[str] = Query(None),
+    title: Optional[str] = Query(None),
+    description: Optional[str] = Query(None),
+    schoolLevel: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    try:
+        entity = create_vocabulary_item_single(
+            userId,
+            vocaId,
+            word,
+            meaning,
+            db,
+            title=title,
+            description=description,
+            schoolLevel=schoolLevel,
+        )
+        return {"status": "success", "data": {"id": entity.id}}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@vocabulary_router.get("/by-word")
+async def get_vocabulary_item_word(
+    word: str = Query(..., description="영어 단어"),
+    userId: Optional[str] = Query(None),
+    vocaId: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    try:
+        item = get_vocabulary_item_by_word(db, word, userId=userId, vocaId=vocaId)
+        if not item:
+            raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다.")
+        return {"status": "success", "data": item}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@vocabulary_router.put("")
+async def update_item(
+    id: int = Query(...),
+    word: Optional[str] = Query(None),
+    meaning: Optional[str] = Query(None),
+    options: Optional[str] = Query(None, description="JSON array string"),
+    db: Session = Depends(get_db)
+):
+    try:
+        options_list = json.loads(options) if options else None
+        entity = update_vocabulary_item(db, id, word=word, meaning=meaning, options=options_list)
+        if not entity:
+            raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다.")
+        return {"status": "success"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@vocabulary_router.delete("")
+async def delete_item(
+    id: int = Query(...),
+    db: Session = Depends(get_db)
+):
+    try:
+        ok = delete_vocabulary_item(db, id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="항목을 찾을 수 없습니다.")
+        return {"status": "success"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@vocabulary_router.post("/fill-missing-options")
+async def fill_missing_options(
+    userId: Optional[str] = Query(None),
+    vocaId: Optional[str] = Query(None),
+    limit: int = Query(100, ge=1, le=1000),
+    db: Session = Depends(get_db)
+):
+    try:
+        # 대상 조회 (필터 적용)
+        query = db.query(VocabularyItem)
+        if userId:
+            query = query.filter(VocabularyItem.userId == userId)
+        if vocaId:
+            query = query.filter(VocabularyItem.vocaId == vocaId)
+
+        candidates = query.all()
+        to_update = []
+        for item in candidates:
+            try:
+                parsed = json.loads(item.options) if item.options else []
+            except Exception:
+                parsed = []
+            if not parsed:
+                to_update.append(item)
+
+        updated = 0
+        processed_items = []
+        for item in to_update[:limit]:
+            try:
+                options = ai_generate_options(item.word, item.meaning)
+                entity = update_vocabulary_item(db, item.id, options=options)
+                if entity:
+                    updated += 1
+                    processed_items.append({
+                        "id": entity.id,
+                        "word": entity.word,
+                        "meaning": entity.meaning,
+                        "options": options,
+                    })
+            except Exception as e:
+                # 개별 항목 실패는 무시하고 계속 진행
+                continue
+
+        return {
+            "status": "success",
+            "updated": updated,
+            "total_candidates": len(to_update),
+            "data": processed_items,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
