@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # 상대 경로로 임포트
 from routes.vocabulary_routes import vocabulary_router
+from routes.search_routes import search_router
 from models.database import create_tables
 
 # 디렉토리 생성
@@ -74,6 +75,7 @@ app.add_middleware(
 
 # 라우터 등록
 app.include_router(vocabulary_router)
+app.include_router(search_router)
 
 # 커스텀 OpenAPI 스키마 생성
 def custom_openapi():

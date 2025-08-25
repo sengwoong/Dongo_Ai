@@ -1,0 +1,31 @@
+{
+  "index_patterns": ["posts-shared"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0
+    },
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "id": {"type": "keyword"},
+        "title": {"type": "text", "analyzer": "standard"},
+        "content": {"type": "text", "analyzer": "standard"},
+        "imageUrl": {"type": "keyword"},
+        "type": {"type": "keyword"},
+        "category": {"type": "keyword"},
+        "is_shared": {"type": "boolean"},
+        "is_ad": {"type": "boolean"},
+        "likeCount": {"type": "integer"},
+        "commentCount": {"type": "integer"},
+        "userId": {"type": "keyword"},
+        "createdAt": {"type": "date"},
+        "updatedAt": {"type": "date"},
+        "model": {"type": "keyword"}
+      }
+    }
+  }
+}
+
+
+
